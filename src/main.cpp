@@ -164,8 +164,6 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 }
 
-double getBestNextLane(double curr_lane, )
-
 int main() {
   uWS::Hub h;
 
@@ -269,7 +267,6 @@ int main() {
               if ((check_car_s > car_s) && ((check_car_s - car_s) < 30))
               {
                 // lower velocity so we don't crash, maybe change lanes, set flags
-                // ref_vel = 29.5; // mph
                 too_close = true;
                 if (lane > 0)
                 {

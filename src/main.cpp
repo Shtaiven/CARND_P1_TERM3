@@ -217,7 +217,7 @@ vector<car_state_t> successorStates(car_state_t state, int lane, int lanes_avail
   return states;
 }
 
-car_state_t chooseNextState(car_state_t current_state, int lane, int lanes_available)
+car_state_t chooseNextState(car_state_t current_state, int lane, int lanes_available, sensor_fusion_t sensor_data)
 {
   return KEEP_LANE;
 }
@@ -314,6 +314,10 @@ int main() {
 
           bool too_close = false;
 
+        // TODO: Generate predicted trajectories for all sensed cars
+        // TODO: Choose next state based on these predictions
+        // TODO: Perform actions based on state
+
           // Look at sensor fusion data about the cars around us and change state if necessary
           for (int i = 0; i < sensor_fusion.size(); i++)
           {
@@ -335,9 +339,8 @@ int main() {
               if ((check_car.s > car_s) && ((check_car.s - car_s) < 30))
               {
                 // lower velocity so we don't crash, maybe change lanes, set flags
+                ref_vel = 29.5;
                 too_close = true;
-                curr_state = chooseNextState(curr_state, lane, num_lanes);
-                // TODO: check for cars, create finite state machine and cost function
               }
             }
           }

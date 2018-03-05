@@ -164,6 +164,64 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 }
 
+typedef struct {
+  double id;
+  double x;
+  double y;
+  double vx;
+  double vy;
+  double s;
+  double d;
+} sensor_fusion_t;
+
+typedef enum {
+  KEEP_LANE,
+  PREP_LANE_CHANGE_LEFT,
+  LANE_CHANGE_LEFT,
+  PREP_LANE_CHANGE_RIGHT,
+  LANE_CHANGE_RIGHT
+} car_state_t;
+
+vector<car_state_t> successorStates(car_state_t state, int lane, int lanes_available)
+{
+  /*
+  Provides the possible next states given the current state for the FSM
+  discussed in the course, with the exception that lane changes happen
+  instantaneously, so LCL and LCR can only transition back to KL.
+  */
+  vector<car_state_t> states;
+  states.push_back(KEEP_LANE);
+
+  if (state == KEEP_LANE)
+  {
+    states.push_back(PREP_LANE_CHANGE_LEFT);
+    states.push_back(PREP_LANE_CHANGE_RIGHT);
+  }
+  else if (state == PREP_LANE_CHANGE_LEFT)
+  {
+    if (lane != lanes_available - 1)
+    {
+      states.push_back(PREP_LANE_CHANGE_LEFT);
+      states.push_back(LANE_CHANGE_LEFT);
+    }
+  }
+  else if (state == PREP_LANE_CHANGE_RIGHT)
+  {
+    if (lane != 0)
+    {
+      states.push_back(PREP_LANE_CHANGE_RIGHT);
+      states.push_back(LANE_CHANGE_RIGHT);
+    }
+  }
+  //If state is LANE_CHANGE_LEFT or LANE_CHANGE_RIGHT, then just return KEEP_LANE
+  return states;
+}
+
+car_state_t chooseNextState(car_state_t current_state, int lane, int lanes_available)
+{
+  return KEEP_LANE;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -204,10 +262,15 @@ int main() {
   // start in lane 1
   int lane = 1;
 
-  // reference velocity to target
-  double ref_vel = 0; // mph
+  int num_lanes = 3;
 
-  h.onMessage([&ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  // reference velocity to target
+  double ref_vel = 0.0; // mph
+
+  // starting state
+  car_state_t curr_state = KEEP_LANE;
+
+  h.onMessage([&curr_state, &ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&num_lanes](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -254,30 +317,32 @@ int main() {
           // Look at sensor fusion data about the cars around us and change state if necessary
           for (int i = 0; i < sensor_fusion.size(); i++)
           {
-            float d = sensor_fusion[i][6];
-            if (d < (2+4*lane+2) && d > (2+4*lane-2))
-            {
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double check_speed = sqrt(vx*vx+vy*vy);
-              double check_car_s = sensor_fusion[i][5];
+            sensor_fusion_t check_car;
+            check_car.id = sensor_fusion[i][0];
+            check_car.x = sensor_fusion[i][1];
+            check_car.y = sensor_fusion[i][2];
+            check_car.vx = sensor_fusion[i][3];
+            check_car.vy = sensor_fusion[i][4];
+            check_car.s = sensor_fusion[i][5];
+            check_car.d = sensor_fusion[i][6];
 
-              check_car_s += (double) prev_size * 0.02 * check_speed;
+            if (check_car.d < (2+4*lane+2) && check_car.d > (2+4*lane-2))
+            {
+              double check_speed = sqrt(pow(check_car.vx, 2)+pow(check_car.vy, 2));
+
+              check_car.s += (double) prev_size * 0.02 * check_speed;
               // if the car is in front of us and less than 30 meters away
-              if ((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+              if ((check_car.s > car_s) && ((check_car.s - car_s) < 30))
               {
                 // lower velocity so we don't crash, maybe change lanes, set flags
                 too_close = true;
-                if (lane > 0)
-                {
-                  lane = 0;
-                }
+                curr_state = chooseNextState(curr_state, lane, num_lanes);
                 // TODO: check for cars, create finite state machine and cost function
               }
             }
           }
 
-          // If the car in from was deemed too close, slow down, otherwise if we aren't near the speed limit, speed up
+          // If the car in front was deemed too close, slow down, otherwise if we aren't near the speed limit, speed up
           if (too_close)
           {
             ref_vel -= .224; // ~5 m/s^2
@@ -349,6 +414,7 @@ int main() {
           // Create a spline curve between the points we generated
           tk::spline s;
 
+          // crea
           s.set_points(pts_x, pts_y);
 
           vector<double> next_x_vals;
@@ -361,6 +427,7 @@ int main() {
             next_y_vals.push_back(previous_path_y[i]);
           }
 
+          // break up spline points so that we travel at our reference velocity
           double target_x = 30.0;
           double target_y = s(target_x);
           double target_dist = sqrt(target_x*target_x+target_y*target_y);
@@ -379,6 +446,7 @@ int main() {
             double x_ref = x_point;
             double y_ref = y_point;
 
+            // Transfor car coordinated back to normal instead of relative to car
             x_point = (x_ref*cos(ref_yaw)-y_ref*sin(ref_yaw));
             y_point = (x_ref*sin(ref_yaw)+y_ref*cos(ref_yaw));
 

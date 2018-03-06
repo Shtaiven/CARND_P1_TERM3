@@ -172,24 +172,25 @@ typedef struct {
   double vy;
   double s;
   double d;
-} sensor_fusion_t;
+} vehicle_t;
 
 typedef enum {
+  CONSTANT_SPEED,
   KEEP_LANE,
   PREP_LANE_CHANGE_LEFT,
   LANE_CHANGE_LEFT,
   PREP_LANE_CHANGE_RIGHT,
   LANE_CHANGE_RIGHT
-} car_state_t;
+} vehicle_state_t;
 
-vector<car_state_t> successorStates(car_state_t state, int lane, int lanes_available)
+vector<vehicle_state_t> successorStates(vehicle_state_t state, int lane, int lanes_available)
 {
   /*
   Provides the possible next states given the current state for the FSM
   discussed in the course, with the exception that lane changes happen
   instantaneously, so LCL and LCR can only transition back to KL.
   */
-  vector<car_state_t> states;
+  vector<vehicle_state_t> states;
   states.push_back(KEEP_LANE);
 
   if (state == KEEP_LANE)
@@ -217,12 +218,54 @@ vector<car_state_t> successorStates(car_state_t state, int lane, int lanes_avail
   return states;
 }
 
-car_state_t chooseNextState(car_state_t current_state, int lane, int lanes_available, sensor_fusion_t sensor_data)
+vector<vehicle_t> generate_trajectory(vehicle_state_t state, vector<vehicle_t> sensor_data)
 {
-  return KEEP_LANE;
+  /*
+  Given a possible next state, generate the appropriate trajectory to realize the next state.
+  */
+  vector<vehicle_t> trajectory;
+  if (state == CONSTANT_SPEED) {
+      trajectory = constant_speed_trajectory();
+  } else if (state == KEEP_LANE) {
+      trajectory = keep_lane_trajectory(sensor_data);
+  } else if (state == LANE_CHANGE_LEFT || state == LANE_CHANGE_RIGHT) {
+      trajectory = lane_change_trajectory(state, sensor_data);
+  } else if (state == PREP_LANE_CHANGE_LEFT || state == PREP_LANE_CHANGE_RIGHT) {
+      trajectory = prep_lane_change_trajectory(state, sensor_data);
+  }
+  return trajectory;
 }
 
-int main() {
+double calculate_cost(vehicle_t )
+{
+
+}
+
+vehicle_state_t chooseNextTrajectory(vehicle_state_t current_state, int lane, int lanes_available, vector<vehicle_t> sensor_data)
+{
+  vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
+  float cost;
+  vector<float> costs;
+  vector<vehicle_state_t> final_states;
+  vector<vector<vehicle_t>> final_trajectories;
+
+  for (int i = 00; i < states.size(), ++i)
+  {
+      vector<vehicle_t> trajectory = generate_trajectory(states[i], sensor_data);
+      if (trajectory.size() != 0) {
+          cost = calculate_cost(sensor_data, trajectory);
+          costs.push_back(cost);
+          final_trajectories.push_back(trajectory);
+      }
+  }
+
+  vector<float>::iterator best_cost = min_element(begin(costs), end(costs));
+  int best_idx = distance(begin(costs), best_cost);
+  return final_trajectories[best_idx];
+}
+
+int main()
+{
   uWS::Hub h;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
@@ -268,7 +311,7 @@ int main() {
   double ref_vel = 0.0; // mph
 
   // starting state
-  car_state_t curr_state = KEEP_LANE;
+  vehicle_state_t curr_state = KEEP_LANE;
 
   h.onMessage([&curr_state, &ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&num_lanes](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -277,7 +320,8 @@ int main() {
     // The 2 signifies a websocket event
     // auto sdata = string(data).substr(0, length);
     // cout << sdata << endl;
-    if (length && length > 2 && data[0] == '4' && data[1] == '2') {
+    if (length && length > 2 && data[0] == '4' && data[1] == '2')
+    {
 
       auto s = hasData(data);
 
@@ -286,7 +330,8 @@ int main() {
 
         string event = j[0].get<string>();
 
-        if (event == "telemetry") {
+        if (event == "telemetry")
+        {
           // j[1] is the data JSON object
 
           // Main car's localization Data
@@ -321,7 +366,7 @@ int main() {
           // Look at sensor fusion data about the cars around us and change state if necessary
           for (int i = 0; i < sensor_fusion.size(); i++)
           {
-            sensor_fusion_t check_car;
+            vehicle_t check_car;
             check_car.id = sensor_fusion[i][0];
             check_car.x = sensor_fusion[i][1];
             check_car.y = sensor_fusion[i][2];
@@ -472,7 +517,9 @@ int main() {
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
         }
-      } else {
+      }
+      else
+      {
         // Manual driving
         std::string msg = "42[\"manual\",{}]";
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);

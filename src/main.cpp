@@ -218,11 +218,12 @@ vector<vehicle_state_t> successorStates(vehicle_state_t state, int lane, int lan
   return states;
 }
 
-vector<vehicle_t> generate_trajectory(vehicle_state_t state, vector<vehicle_t> sensor_data)
+vector<vehicle_t> generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<vehicle_t>> sensor_data)
 {
   /*
   Given a possible next state, generate the appropriate trajectory to realize the next state.
   */
+  // TODO: Calculate trajectories based on state
   vector<vehicle_t> trajectory;
   if (state == CONSTANT_SPEED) {
       trajectory = constant_speed_trajectory();
@@ -236,12 +237,12 @@ vector<vehicle_t> generate_trajectory(vehicle_state_t state, vector<vehicle_t> s
   return trajectory;
 }
 
-double calculate_cost(vehicle_t )
+double calculate_cost(vector<vehicle_t> trajectory, vector<vector<vehicle_t>> sensor_data)
 {
-
+  // TODO: calculate cost of a trajectory
 }
 
-vehicle_state_t chooseNextTrajectory(vehicle_state_t current_state, int lane, int lanes_available, vector<vehicle_t> sensor_data)
+vehicle_state_t chooseNextTrajectory(vehicle_t vehicle, vehicle_state_t current_state, int lane, int lanes_available, vector<vector<vehicle_t>> sensor_data)
 {
   vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
   float cost;
@@ -251,9 +252,9 @@ vehicle_state_t chooseNextTrajectory(vehicle_state_t current_state, int lane, in
 
   for (int i = 00; i < states.size(), ++i)
   {
-      vector<vehicle_t> trajectory = generate_trajectory(states[i], sensor_data);
+      vector<vehicle_t> trajectory = generate_trajectory(vehicle, states[i], sensor_data);
       if (trajectory.size() != 0) {
-          cost = calculate_cost(sensor_data, trajectory);
+          cost = calculate_cost(trajectory, sensor_data);
           costs.push_back(cost);
           final_trajectories.push_back(trajectory);
       }

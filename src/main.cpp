@@ -249,16 +249,17 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 // Used for calculating trajectories of observed vehicles
 vector<point_t> constant_speed_trajectory(vehicle_t vehicle)
 {
-
+  // TODO:
 }
 
 vector<point_t> keep_lane_trajectory(vehicle_t vehicle, vector<vector<point_t>> sensor_data)
 {
+  // TODO: make this work
   bool too_close = false;
 
-  for (int i = 0; i < observed_trajectories.size(); i++)
+  for (int i = 0; i < sensor_data.size(); i++)
   {
-    if (check_car.d < (2+4*lane+2) && check_car.d > (2+4*lane-2))
+    if (vehicle.d < (2+4*lane+2) && vehicle.d > (2+4*lane-2))
     {
       double check_speed = sqrt(pow(check_car.vx, 2)+pow(check_car.vy, 2));
 
@@ -391,12 +392,12 @@ vector<point_t> keep_lane_trajectory(vehicle_t vehicle, vector<vector<point_t>> 
 
 vector<point_t> lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
 {
-
+  // TODO:
 }
 
 vector<point_t> prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
 {
-
+  // TODO:
 }
 
 vector<point_t> generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
@@ -404,7 +405,6 @@ vector<point_t> generate_trajectory(vehicle_t vehicle, vehicle_state_t state, ve
   /*
   Given a possible next state, generate the appropriate trajectory to realize the next state.
   */
-  // TODO: Calculate trajectories based on state
   vector<point_t> trajectory;
   if (state == KEEP_LANE) {
       trajectory = keep_lane_trajectory(vehicle, sensor_data);
@@ -553,10 +553,6 @@ int main()
           this_car.d = car_d;
           this_car.yaw = car_yaw;
           this_car.speed = car_speed;
-
-          // TODO: Generate predicted trajectories for all sensed cars
-          // TODO: Choose next state based on these predictions
-          // TODO: Perform actions based on state
 
           // Look at sensor fusion data about the cars around us and predict their trajectories
           vector<vector<point_t>> observed_trajectories;

@@ -25,13 +25,6 @@ double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
 // POD structs: these are here for simplicity's sake instead of full classes (takes less memory)
-// point_t is somewhat redundant with there being a vehicle state, but allows for less memory
-//   usage when creating longtrajectories.
-typedef struct {
-  double x;
-  double y;
-} point_t;
-
 typedef struct {
   double id;
   double x;
@@ -77,7 +70,7 @@ double distance(double x1, double y1, double x2, double y2)
   return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
 
-double distance(point_t p1, point_t p2)
+double distance(vehicle_t p1, vehicle_t p2)
 {
   return distance(p1.x, p1.y, p2.x, p2.y);
 }
@@ -247,25 +240,25 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 }
 
 // Used for calculating trajectories of observed vehicles
-vector<point_t> constant_speed_trajectory(vehicle_t vehicle)
+vector<vehicle_t> constant_speed_trajectory(vehicle_t vehicle)
 {
   // TODO:
 }
 
-vector<point_t> keep_lane_trajectory(vehicle_t vehicle, vector<vector<point_t>> sensor_data)
+vector<vehicle_t> keep_lane_trajectory(vehicle_t vehicle, vector<vector<vehicle_t>> sensor_data, double & ref_vel)
 {
   // TODO: make this work
   bool too_close = false;
 
+  // For the trajectory of every sensed vehicle
   for (int i = 0; i < sensor_data.size(); i++)
   {
-    if (vehicle.d < (2+4*lane+2) && vehicle.d > (2+4*lane-2))
+    vehicle_t check_car = sensor_data[i][1]; // use the next point for the car sensed to deal with lag
+    // if the sensed car is in front of us
+    if (check_car.d < (vehicle.d+2) && check_car.d > (vehicle.d-2))
     {
-      double check_speed = sqrt(pow(check_car.vx, 2)+pow(check_car.vy, 2));
-
-      check_car.s += (double) prev_size * 0.02 * check_speed;
-      // if the car is in front of us and less than 30 meters away
-      if ((check_car.s > car_s) && ((check_car.s - car_s) < 30))
+      // if the sensed car is less than 30 meters away
+      if ((check_car.s > vehicle.s) && ((check_car.s - vehicle.s) < 30))
       {
         // lower velocity so we don't crash, maybe change lanes, set flags
         ref_vel = 29.5;
@@ -390,48 +383,48 @@ vector<point_t> keep_lane_trajectory(vehicle_t vehicle, vector<vector<point_t>> 
   }
 }
 
-vector<point_t> lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
+vector<vehicle_t> lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<vehicle_t>> sensor_data, double & ref_vel)
 {
   // TODO:
 }
 
-vector<point_t> prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
+vector<vehicle_t> prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<vehicle_t>> sensor_data, double & ref_vel)
 {
   // TODO:
 }
 
-vector<point_t> generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<point_t>> sensor_data)
+vector<vehicle_t> generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vector<vehicle_t>> sensor_data, double & ref_vel)
 {
   /*
   Given a possible next state, generate the appropriate trajectory to realize the next state.
   */
-  vector<point_t> trajectory;
+  vector<vehicle_t> trajectory;
   if (state == KEEP_LANE) {
-      trajectory = keep_lane_trajectory(vehicle, sensor_data);
+      trajectory = keep_lane_trajectory(vehicle, sensor_data, double & ref_vel);
   } else if (state == LANE_CHANGE_LEFT || state == LANE_CHANGE_RIGHT) {
-      trajectory = lane_change_trajectory(vehicle, state, sensor_data);
+      trajectory = lane_change_trajectory(vehicle, state, sensor_data, double & ref_vel);
   } else if (state == PREP_LANE_CHANGE_LEFT || state == PREP_LANE_CHANGE_RIGHT) {
-      trajectory = prep_lane_change_trajectory(vehicle, state, sensor_data);
+      trajectory = prep_lane_change_trajectory(vehicle, state, sensor_data, double & ref_vel);
   }
   return trajectory;
 }
 
-double calculate_cost(vector<vehicle_t> trajectory, vector<vector<point_t>> sensor_data)
+double calculate_cost(vector<vehicle_t> trajectory, vector<vector<vehicle_t>> sensor_data)
 {
   // TODO: calculate cost of a trajectory
 }
 
-vector<point_t> choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<vector<point_t>> sensor_data)
+vector<vehicle_t> choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<vector<vehicle_t>> sensor_data, double & ref_vel)
 {
   vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
   float cost;
   vector<float> costs;
   vector<vehicle_state_t> final_states;
-  vector<vector<point_t>> final_trajectories;
+  vector<vector<vehicle_t>> final_trajectories;
 
   for (int i = 0; i < final_states.size(), ++i)
   {
-      vector<point_t> trajectory = generate_trajectory(vehicle, final_states[i], sensor_data);
+      vector<vehicle_t> trajectory = generate_trajectory(vehicle, final_states[i], sensor_data, ref_vel);
       if (trajectory.size() != 0) {
           cost = calculate_cost(trajectory, sensor_data);
           costs.push_back(cost);
@@ -555,7 +548,7 @@ int main()
           this_car.speed = car_speed;
 
           // Look at sensor fusion data about the cars around us and predict their trajectories
-          vector<vector<point_t>> observed_trajectories;
+          vector<vector<vehicle_t>> observed_trajectories;
           for (int i = 0; i < sensor_fusion.size(); i++)
           {
             vehicle_t check_car;
@@ -566,14 +559,15 @@ int main()
             check_car.vy = sensor_fusion[i][4];
             check_car.s = sensor_fusion[i][5];
             check_car.d = sensor_fusion[i][6];
+            check_car.speed = sqrt(pow(check_car.vx, 2)+pow(check_car.vy, 2));
 
             // Generate a trajectory assuming contant speed for all cars detected through sensor fusion
             observed_trajectories.push_back(constant_speed_trajectory(check_car)); 
           }
 
           // Choose next trajectory for our car
-          vector<point_t> trajectory;
-          trajectory = choose_next_trajectory(this_car, curr_state, lane, num_lanes, observed_trajectories);
+          vector<vehicle_t> trajectory;
+          trajectory = choose_next_trajectory(this_car, curr_state, lane, num_lanes, observed_trajectories, ref_vel);
 
           // Send New Trajectory
           json msgJson;

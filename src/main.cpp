@@ -396,21 +396,27 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor
   return trajectory;
 }
 
-trajectory_t lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data,
+                                    double & ref_vel, int prev_path_size, int total_path_size,
+                                    trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // TODO:
   trajectory_t trajectory;
   return trajectory;
 }
 
-trajectory_t prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data,
+                                         double & ref_vel, int prev_path_size, int total_path_size,
+                                         trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // TODO:
   trajectory_t trajectory;
   return trajectory;
 }
 
-trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data,
+                                 double & ref_vel, int prev_path_size, int total_path_size,
+                                 trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   /*
   Given a possible next state, generate the appropriate trajectory to realize the next state.
@@ -432,7 +438,9 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> sensor_data)
   return 1.0;
 }
 
-trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<trajectory_t> sensor_data,
+                                    double & ref_vel, int prev_path_size, int total_path_size,
+                                    trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
   float cost;
@@ -537,8 +545,8 @@ int main()
           double car_d = j[1]["d"];
           double car_yaw = j[1]["yaw"];
           double car_speed = j[1]["speed"];
-          auto previous_path_x = j[1]["previous_path_x"];
-          auto previous_path_y = j[1]["previous_path_y"];
+          vector<double> previous_path_x = j[1]["previous_path_x"];
+          vector<double> previous_path_y = j[1]["previous_path_y"];
           double end_path_s = j[1]["end_path_s"];
           double end_path_d = j[1]["end_path_d"];
           vector<vector<double>> sensor_fusion = j[1]["sensor_fusion"];
@@ -546,6 +554,10 @@ int main()
           /**********************************************************************
            * Build Car Trajectory
            *********************************************************************/
+          // TODO: Use throughout script and pass to trajectory generation functions
+          trajectory_t previous_path;
+          previous_path.x_vec = previous_path_x;
+          previous_path.y_vec = previous_path_y;
 
           int prev_size = previous_path_x.size(); // number of points from the previous path which weren't traversed yet
 

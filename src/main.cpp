@@ -24,7 +24,6 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
-// TODO: use this throughout program instead of vehicle_t
 // Holds a series of points
 struct trajectory_t {
   vector<double> x_vec;
@@ -263,7 +262,7 @@ trajectory_t constant_speed_trajectory(vehicle_t vehicle)
   return trajectory;
 }
 
-trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size)
+trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // TODO: make this work
   bool too_close = false;
@@ -332,9 +331,9 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor
   }
 
   // Add even 30 meter points in front of the car's reference position to our list of next points
-  vector<double> next_wp0 = getXY(vehicle.s+30, vehicle.d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-  vector<double> next_wp1 = getXY(vehicle.s+60, vehicle.d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-  vector<double> next_wp2 = getXY(vehicle.s+90, vehicle.d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+  vector<double> next_wp0 = getXY(vehicle.s+30, vehicle.d, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+  vector<double> next_wp1 = getXY(vehicle.s+60, vehicle.d, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+  vector<double> next_wp2 = getXY(vehicle.s+90, vehicle.d, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
 
   pts_x.push_back(next_wp0[0]);
   pts_x.push_back(next_wp1[0]);
@@ -393,32 +392,32 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor
   return trajectory;
 }
 
-trajectory_t lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size)
+trajectory_t lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // TODO:
   trajectory_t trajectory;
   return trajectory;
 }
 
-trajectory_t prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size)
+trajectory_t prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // TODO:
   trajectory_t trajectory;
   return trajectory;
 }
 
-trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size)
+trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   /*
   Given a possible next state, generate the appropriate trajectory to realize the next state.
   */
   trajectory_t trajectory;
   if (state == KEEP_LANE) {
-      trajectory = keep_lane_trajectory(vehicle, sensor_data, ref_vel, prev_path_size, total_path_size);
+      trajectory = keep_lane_trajectory(vehicle, sensor_data, ref_vel, prev_path_size, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
   } else if (state == LANE_CHANGE_LEFT || state == LANE_CHANGE_RIGHT) {
-      trajectory = lane_change_trajectory(vehicle, state, sensor_data, ref_vel, prev_path_size, total_path_size);
+      trajectory = lane_change_trajectory(vehicle, state, sensor_data, ref_vel, prev_path_size, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
   } else if (state == PREP_LANE_CHANGE_LEFT || state == PREP_LANE_CHANGE_RIGHT) {
-      trajectory = prep_lane_change_trajectory(vehicle, state, sensor_data, ref_vel, prev_path_size, total_path_size);
+      trajectory = prep_lane_change_trajectory(vehicle, state, sensor_data, ref_vel, prev_path_size, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
   }
   return trajectory;
 }
@@ -429,7 +428,7 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> sensor_data)
   return 1.0;
 }
 
-trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size)
+trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int lane, int lanes_available, vector<trajectory_t> sensor_data, double & ref_vel, int prev_path_size, int total_path_size, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
   float cost;
@@ -439,7 +438,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
 
   for (int i = 0; i < final_states.size(); ++i)
   {
-    trajectory_t trajectory = generate_trajectory(vehicle, final_states[i], sensor_data, ref_vel, prev_path_size, total_path_size);
+    trajectory_t trajectory = generate_trajectory(vehicle, final_states[i], sensor_data, ref_vel, prev_path_size, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
         cost = calculate_cost(trajectory, sensor_data);
         costs.push_back(cost);
@@ -590,7 +589,7 @@ int main()
 
           // Choose next trajectory for our car
           trajectory_t new_trajectory;
-          new_trajectory = choose_next_trajectory(this_car, curr_state, lane, num_lanes, observed_trajectories, ref_vel, prev_size, 50);
+          new_trajectory = choose_next_trajectory(this_car, curr_state, lane, num_lanes, observed_trajectories, ref_vel, prev_size, 50, map_waypoints, map_waypoints_del, map_waypoints_s);
 
           // Add newly calculated trajectory to this path
           merge_trajectories(next_trajectory, new_trajectory);

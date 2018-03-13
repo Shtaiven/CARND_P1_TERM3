@@ -270,7 +270,11 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<trajectory_t> sensor
   // For the trajectory of every sensed vehicle
   for (int i = 0; i < sensor_data.size(); i++)
   {
-    vehicle_t check_car = sensor_data[i][1]; // use the next point for the car sensed to deal with lag
+    // use the next point for the car sensed to deal with lag
+    vehicle_t check_car;
+    check_car.x = sensor_data[i].x_vec[1];
+    check_car.y = sensor_data[i].y_vec[1];
+
     // if the sensed car is in front of us
     if (check_car.d < (vehicle.d+2) && check_car.d > (vehicle.d-2))
     {

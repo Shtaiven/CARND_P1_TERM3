@@ -259,6 +259,9 @@ trajectory_t constant_speed_trajectory(vehicle_t vehicle)
 {
   // TODO:
   trajectory_t trajectory;
+  trajectory.x_vec.push_back(vehicle.x);
+  trajectory.y_vec.push_back(vehicle.y);
+
   return trajectory;
 }
 
@@ -446,12 +449,11 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   vector<vehicle_state_t> states = successor_states(current_state, lane, lanes_available);
   float cost;
   vector<float> costs;
-  vector<vehicle_state_t> final_states;
   vector<trajectory_t> final_trajectories;
 
-  for (int i = 0; i < final_states.size(); ++i)
+  for (int i = 0; i < states.size(); ++i)
   {
-    trajectory_t trajectory = generate_trajectory(vehicle, final_states[i], sensor_data, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
+    trajectory_t trajectory = generate_trajectory(vehicle, states[i], sensor_data, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
         cost = calculate_cost(trajectory, sensor_data);
         costs.push_back(cost);
@@ -462,8 +464,10 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   vector<float>::iterator best_cost = min_element(begin(costs), end(costs));
   int best_idx = distance(begin(costs), best_cost);
 
-  // current_state = final_states[best_idx];
+  // current_state = states[best_idx];
   current_state = KEEP_LANE; // TODO: remove
+  printf("num trajectories: %ld\n", final_trajectories.size());
+
   return final_trajectories[best_idx];
 }
 
@@ -555,7 +559,6 @@ int main()
           /**********************************************************************
            * Build Car Trajectory
            *********************************************************************/
-          // TODO: Use throughout script and pass to trajectory generation functions
           trajectory_t previous_path;
           previous_path.x_vec = previous_path_x;
           previous_path.y_vec = previous_path_y;

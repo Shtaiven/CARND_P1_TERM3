@@ -28,6 +28,7 @@ double rad2deg(double x) { return x * 180 / pi(); }
 struct trajectory_t {
   vector<double> x_vec;
   vector<double> y_vec;
+  double ref_vel;
 };
 
 // Vehicle data POD
@@ -257,7 +258,7 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 // Used for calculating trajectories of observed vehicles
 trajectory_t constant_speed_trajectory(vehicle_t vehicle)
 {
-  // TODO:
+  // TODO: Calculate trajectories for sensed vehicles
   trajectory_t trajectory;
   trajectory.x_vec.push_back(vehicle.x);
   trajectory.y_vec.push_back(vehicle.y);
@@ -265,11 +266,13 @@ trajectory_t constant_speed_trajectory(vehicle_t vehicle)
   return trajectory;
 }
 
-trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<vehicle_t> sensor_data,
-                                  int & lane, double & ref_vel, trajectory_t prev_path, int total_path_size,
-                                  trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vehicle_t> sensor_data,
+                                 int lane, double ref_vel, trajectory_t prev_path, int total_path_size,
+                                 trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
-  // TODO: make this work
+  /*
+  Given a possible next state, generate the appropriate trajectory to realize the next state.
+  */
   bool too_close = false;
   int prev_path_size = prev_path.x_vec.size();
 
@@ -297,6 +300,23 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<vehicle_t> sensor_da
       {
         // lower velocity so we don't crash, maybe change lanes, set flags
         too_close = true;
+
+        switch (state)
+        {
+          case LANE_CHANGE_LEFT:
+          lane--;
+          break;
+
+          case LANE_CHANGE_RIGHT:
+          lane++;
+          break;
+
+          case PREP_LANE_CHANGE_LEFT:
+          break;
+
+          case PREP_LANE_CHANGE_RIGHT:
+          break;
+        }
       }
     }
   }
@@ -382,6 +402,7 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<vehicle_t> sensor_da
   double x_add_on = 0;
 
   trajectory_t trajectory;
+  trajectory.ref_vel = ref_vel;
 
   // Interpolate between the points we generated previously using the spline function until we have a total of 50 points
   for (int i = 1; i <= total_path_size-prev_path_size; i++)
@@ -409,43 +430,7 @@ trajectory_t keep_lane_trajectory(vehicle_t vehicle, vector<vehicle_t> sensor_da
   return trajectory;
 }
 
-trajectory_t lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vehicle_t> sensor_data,
-                                    int & lane, double & ref_vel, trajectory_t prev_path, int total_path_size,
-                                    trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
-{
-  // TODO:
-  trajectory_t trajectory;
-  return trajectory;
-}
-
-trajectory_t prep_lane_change_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vehicle_t> sensor_data,
-                                         int & lane, double & ref_vel, trajectory_t prev_path, int total_path_size,
-                                         trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
-{
-  // TODO:
-  trajectory_t trajectory;
-  return trajectory;
-}
-
-trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vector<vehicle_t> sensor_data,
-                                 int & lane, double & ref_vel, trajectory_t prev_path, int total_path_size,
-                                 trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
-{
-  /*
-  Given a possible next state, generate the appropriate trajectory to realize the next state.
-  */
-  trajectory_t trajectory;
-  if (state == KEEP_LANE) {
-      trajectory = keep_lane_trajectory(vehicle, sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
-  } else if (state == LANE_CHANGE_LEFT || state == LANE_CHANGE_RIGHT) {
-      trajectory = lane_change_trajectory(vehicle, state, sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
-  } else if (state == PREP_LANE_CHANGE_LEFT || state == PREP_LANE_CHANGE_RIGHT) {
-      trajectory = prep_lane_change_trajectory(vehicle, state, sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
-  }
-  return trajectory;
-}
-
-double calculate_cost(trajectory_t trajectory, vector<vehicle_t> sensor_data)
+double calculate_cost(trajectory_t trajectory, vector<vehicle_t> sensor_data, int lanes_available)
 {
   // TODO: calculate cost of a trajectory
   return 1.0;
@@ -464,7 +449,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   {
     trajectory_t trajectory = generate_trajectory(vehicle, states[i], sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
-        cost = calculate_cost(trajectory, sensor_data);
+        cost = calculate_cost(trajectory, sensor_data, lanes_available);
         costs.push_back(cost);
         final_trajectories.push_back(trajectory);
     }
@@ -473,10 +458,22 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   vector<float>::iterator best_cost = min_element(begin(costs), end(costs));
   int best_idx = distance(begin(costs), best_cost);
 
-  // current_state = states[best_idx];
-  current_state = KEEP_LANE; // TODO: remove
+  current_state = states[best_idx];
+  trajectory_t final_trajectory = final_trajectories[best_idx];
+  ref_vel = final_trajectory.ref_vel;
 
-  return final_trajectories[best_idx];
+  switch (current_state)
+  {
+    case LANE_CHANGE_LEFT:
+    --lane = lane<0?0:lane;
+    break;
+
+    case LANE_CHANGE_RIGHT:
+    ++lane = lane>lanes_available?lanes_available:lane;
+    break;
+  }
+
+  return final_trajectory;
 }
 
 /*****************************************************************************

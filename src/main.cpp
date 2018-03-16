@@ -29,6 +29,7 @@ struct trajectory_t {
   vector<double> x_vec;
   vector<double> y_vec;
   double ref_vel;
+  int final_lane;
 };
 
 // Vehicle data POD
@@ -262,6 +263,8 @@ trajectory_t constant_speed_trajectory(vehicle_t vehicle)
   trajectory_t trajectory;
   trajectory.x_vec.push_back(vehicle.x);
   trajectory.y_vec.push_back(vehicle.y);
+  trajectory.ref_vel = sqrt(pow(vehicle.vx, 2) + pow(vehicle.vy, 2));
+  trajectory.final_lane = (int) floor(vehicle.d/4);
 
   return trajectory;
 }
@@ -403,6 +406,7 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
 
   trajectory_t trajectory;
   trajectory.ref_vel = ref_vel;
+  trajectory.final_lane = lane;
 
   // Interpolate between the points we generated previously using the spline function until we have a total of 50 points
   for (int i = 1; i <= total_path_size-prev_path_size; i++)
@@ -430,10 +434,18 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
   return trajectory;
 }
 
-double calculate_cost(trajectory_t trajectory, vector<vehicle_t> sensor_data, int lanes_available)
+double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_trajectories, int end_lane, int lanes_available)
 {
   // TODO: calculate cost of a trajectory
-  return 1.0;
+  double cost = 0.0;
+
+  // if the car doesn't go "out of bounds"
+  if (!(end_lane > lanes_available || end_lane < 0))
+  {
+    // check if car trajectory intersects a vehicles path
+  }
+
+  return cost;
 }
 
 trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current_state, int & lane, int lanes_available, vector<vehicle_t> sensor_data,
@@ -444,12 +456,18 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   float cost;
   vector<float> costs;
   vector<trajectory_t> final_trajectories;
+  vector<trajectory_t> observed_trajectories;
+
+  for (int i = 0; i < sensor_data.size(); ++i)
+  {
+    observed_trajectories.push_back(constant_speed_trajectory(sensor_data[i]));
+  }
 
   for (int i = 0; i < states.size(); ++i)
   {
     trajectory_t trajectory = generate_trajectory(vehicle, states[i], sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
-        cost = calculate_cost(trajectory, sensor_data, lanes_available);
+        cost = calculate_cost(trajectory, observed_trajectories, trajectory.final_lane, lanes_available);
         costs.push_back(cost);
         final_trajectories.push_back(trajectory);
     }
@@ -465,11 +483,11 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   switch (current_state)
   {
     case LANE_CHANGE_LEFT:
-    --lane = lane<0?0:lane;
+    lane = final_trajectory.final_lane<0?0:final_trajectory.final_lane;
     break;
 
     case LANE_CHANGE_RIGHT:
-    ++lane = lane>lanes_available?lanes_available:lane;
+    lane = final_trajectory.final_lane>lanes_available?lanes_available:final_trajectory.final_lane;
     break;
   }
 

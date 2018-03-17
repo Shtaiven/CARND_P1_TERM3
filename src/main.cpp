@@ -257,14 +257,86 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 }
 
 // Used for calculating trajectories of observed vehicles
-trajectory_t constant_speed_trajectory(vehicle_t vehicle)
+trajectory_t constant_speed_trajectory(vehicle_t vehicle, int num_points, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
-  // TODO: Calculate trajectories for sensed vehicles
   trajectory_t trajectory;
-  trajectory.x_vec.push_back(vehicle.x);
-  trajectory.y_vec.push_back(vehicle.y);
-  trajectory.ref_vel = sqrt(pow(vehicle.vx, 2) + pow(vehicle.vy, 2));
+  trajectory.ref_vel = vehicle.speed;
   trajectory.final_lane = (int) floor(vehicle.d/4);
+
+  vector<double> pts_x;
+  vector<double> pts_y;
+
+  // Define our starting reference as the position of the car currently
+  double ref_x = vehicle.x;
+  double ref_y = vehicle.y;
+  double ref_yaw = deg2rad(vehicle.yaw);
+
+// Start our path by looking at the previous point traversed and the current one
+  double prev_car_x = vehicle.x - cos(vehicle.yaw);
+  double prev_car_y = vehicle.y - sin(vehicle.yaw);
+
+  pts_x.push_back(prev_car_x);
+  pts_x.push_back(vehicle.x);
+
+  pts_y.push_back(prev_car_y);
+  pts_y.push_back(vehicle.y);
+
+  // Add even 30 meter points in front of the car's reference position to our list of next points
+  vector<double> next_wp0 = getXY(vehicle.s+30, (2+trajectory.final_lane*4), map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+  vector<double> next_wp1 = getXY(vehicle.s+60, (2+trajectory.final_lane*4), map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+  vector<double> next_wp2 = getXY(vehicle.s+90, (2+trajectory.final_lane*4), map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+
+  pts_x.push_back(next_wp0[0]);
+  pts_x.push_back(next_wp1[0]);
+  pts_x.push_back(next_wp2[0]);
+
+  pts_y.push_back(next_wp0[1]);
+  pts_y.push_back(next_wp1[1]);
+  pts_y.push_back(next_wp2[1]);
+
+  // Define car's position as (0,0) with yaw 0
+  for (int i = 0; i < pts_x.size(); i++)
+  {
+    double shift_x = pts_x[i] - ref_x;
+    double shift_y = pts_y[i] - ref_y;
+
+    pts_x[i] = (shift_x * cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
+    pts_y[i] = (shift_x * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
+  }
+
+  // Create a spline curve between the points we generated
+  tk::spline s;
+  s.set_points(pts_x, pts_y);
+
+  // break up spline points so that we travel at our reference velocity
+  double target_x = 30.0;
+  double target_y = s(target_x);
+  double target_dist = sqrt(target_x*target_x+target_y*target_y);
+
+  double x_add_on = 0;
+
+  // Interpolate between the points we generated previously using the spline function until we have a total of 50 points
+  for (int i = 1; i < num_points; i++)
+  {
+    double N = target_dist/(0.02*trajectory.ref_vel/2.24);
+    double x_point = x_add_on+target_x/N;
+    double y_point = s(x_point);
+
+    x_add_on = x_point;
+
+    double x_ref = x_point;
+    double y_ref = y_point;
+
+    // Transfer car coordinates back to normal instead of relative to car
+    x_point = (x_ref*cos(ref_yaw)-y_ref*sin(ref_yaw));
+    y_point = (x_ref*sin(ref_yaw)+y_ref*cos(ref_yaw));
+
+    x_point += ref_x;
+    y_point += ref_y;
+
+    trajectory.x_vec.push_back(x_point);
+    trajectory.y_vec.push_back(y_point);
+  }
 
   return trajectory;
 }
@@ -284,19 +356,18 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
   {
     // use the next point for the car sensed to deal with lag
     vehicle_t check_car;
-    vector<double> check_car_frenet = getFrenet(check_car.x, check_car.y, 0, map_waypoints.x_vec, map_waypoints.y_vec);
     check_car.x = sensor_data[i].x;
     check_car.y = sensor_data[i].y;
     check_car.s = sensor_data[i].s;
     check_car.d = sensor_data[i].d;
     check_car.vx = sensor_data[i].vx;
     check_car.vy = sensor_data[i].vy;
+    check_car.speed = sqrt(pow(check_car.vx, 2) + pow(check_car.vy, 2));
 
     // if the sensed car is in front of us
     if (check_car.d < (2+4*lane+2) && check_car.d > (2+4*lane-2))
     {
-      double check_speed = sqrt(pow(check_car.vx, 2) + pow(check_car.vy, 2));
-      check_car.s += (double) prev_path_size * 0.02 * check_speed;
+      check_car.s += (double) prev_path_size * 0.02 * check_car.speed;
 
       // if the sensed car is less than 30 meters away
       if ((check_car.s > vehicle.s) && ((check_car.s - vehicle.s) < 30))
@@ -460,7 +531,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
 
   for (int i = 0; i < sensor_data.size(); ++i)
   {
-    observed_trajectories.push_back(constant_speed_trajectory(sensor_data[i]));
+    observed_trajectories.push_back(constant_speed_trajectory(sensor_data[i], 50, map_waypoints, map_waypoints_del, map_waypoints_s));
   }
 
   for (int i = 0; i < states.size(); ++i)
@@ -616,6 +687,7 @@ int main()
             check_car.s = sensor_fusion[i][5];
             check_car.d = sensor_fusion[i][6];
             check_car.speed = sqrt(pow(check_car.vx, 2)+pow(check_car.vy, 2));
+            check_car.yaw = rad2deg(atan2(check_car.vy, check_car.vx));
 
             // Generate a trajectory assuming contant speed for all cars detected through sensor fusion
             sensor_data.push_back(check_car);

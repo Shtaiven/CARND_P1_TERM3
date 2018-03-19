@@ -233,26 +233,10 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 
   if (state == KEEP_LANE)
   {
-    states.push_back(PREP_LANE_CHANGE_LEFT);
-    states.push_back(PREP_LANE_CHANGE_RIGHT);
+    states.push_back(LANE_CHANGE_LEFT);
+    states.push_back(LANE_CHANGE_RIGHT);
   }
-  else if (state == PREP_LANE_CHANGE_LEFT)
-  {
-    if (lane != lanes_available - 1)
-    {
-      states.push_back(PREP_LANE_CHANGE_LEFT);
-      states.push_back(LANE_CHANGE_LEFT);
-    }
-  }
-  else if (state == PREP_LANE_CHANGE_RIGHT)
-  {
-    if (lane != 0)
-    {
-      states.push_back(PREP_LANE_CHANGE_RIGHT);
-      states.push_back(LANE_CHANGE_RIGHT);
-    }
-  }
-  //If state is LANE_CHANGE_LEFT or LANE_CHANGE_RIGHT, then just return KEEP_LANE
+
   return states;
 }
 
@@ -396,8 +380,6 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
       if ((check_car.s > vehicle.s) && ((check_car.s - vehicle.s) < 30))
       {
         // lower velocity so we don't crash, maybe change lanes, set flags
-        too_close = true;
-
         switch (state)
         {
           case LANE_CHANGE_LEFT:
@@ -408,11 +390,8 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
           lane++;
           break;
 
-          case PREP_LANE_CHANGE_LEFT:
-          break;
-
-          case PREP_LANE_CHANGE_RIGHT:
-          break;
+          default:
+            too_close = true;
         }
       }
     }
@@ -528,16 +507,39 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
   return trajectory;
 }
 
-double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_trajectories, int end_lane, int lanes_available)
+double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_trajectories, int lanes_available, double speed_limit)
 {
-  // TODO: calculate cost of a trajectory
-  double cost = 0.0;
+  // Calculate cost of a trajectory by checking if:
+  // - there will be a collision
+  // - the car goes offroad
+  // - the lane change will result in being slower
 
-  // if the car doesn't go "out of bounds"
-  if (!(end_lane > lanes_available || end_lane < 0))
+  double cost = 100.0;
+
+  // if the car goes offroad or goes into the lane going in the wrong direction
+  if (trajectory.final_lane < 0 || trajectory.final_lane >= lanes_available)
   {
-    // check if car trajectory intersects a vehicles path
+    return cost;
   }
+
+  bool collision = false;
+
+  for (int i = 0; i < observed_trajectories.size(); ++i)
+  {
+    // TODO: check for trajectory collisions here
+  }
+
+  // if there will be a collision with an observed vehicle
+  if (collision)
+  {
+    return cost;
+  }
+
+  // Rank trajectory based on distance from speed limit
+  double vx_final = trajectory.x_vec[trajectory.x_vec.size()-1] - trajectory.x_vec[trajectory.x_vec.size()-2];
+  double vy_final = trajectory.y_vec[trajectory.y_vec.size()-1] - trajectory.y_vec[trajectory.y_vec.size()-2];
+  double speed_final = sqrt(pow(vx_final, 2)+pow(vy_final, 2));
+  cost = (2.0*speed_limit - speed_final)/speed_limit;
 
   return cost;
 }
@@ -561,7 +563,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   {
     trajectory_t trajectory = generate_trajectory(vehicle, states[i], sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
-        cost = calculate_cost(trajectory, observed_trajectories, trajectory.final_lane, lanes_available);
+        cost = calculate_cost(trajectory, observed_trajectories, lanes_available, 50.0);
         costs.push_back(cost);
         final_trajectories.push_back(trajectory);
     }
@@ -573,18 +575,8 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   current_state = states[best_idx];
   trajectory_t final_trajectory = final_trajectories[best_idx];
   ref_vel = final_trajectory.ref_vel;
-
-  switch (current_state)
-  {
-    case LANE_CHANGE_LEFT:
-    lane = final_trajectory.final_lane<0?0:final_trajectory.final_lane;
-    break;
-
-    case LANE_CHANGE_RIGHT:
-    lane = final_trajectory.final_lane>lanes_available?lanes_available:final_trajectory.final_lane;
-    break;
-  }
-
+  lane = final_trajectory.final_lane;
+  cout << current_state << ", " << ref_vel << ", " << lane << ", " << costs[best_idx] << endl;
   return final_trajectory;
 }
 

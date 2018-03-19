@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include <cfloat>
 
 using namespace std;
 
@@ -514,7 +515,7 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
   // - the car goes offroad
   // - the lane change will result in being slower
 
-  double cost = 100.0;
+  double cost = DBL_MAX;
 
   // if the car goes offroad or goes into the lane going in the wrong direction
   if (trajectory.final_lane < 0 || trajectory.final_lane >= lanes_available)
@@ -536,10 +537,16 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
   }
 
   // Rank trajectory based on distance from speed limit
-  double vx_final = trajectory.x_vec[trajectory.x_vec.size()-1] - trajectory.x_vec[trajectory.x_vec.size()-2];
-  double vy_final = trajectory.y_vec[trajectory.y_vec.size()-1] - trajectory.y_vec[trajectory.y_vec.size()-2];
-  double speed_final = sqrt(pow(vx_final, 2)+pow(vy_final, 2));
-  cost = (2.0*speed_limit - speed_final)/speed_limit;
+  if (trajectory.x_vec.size() > 1)
+  {
+    double vx_final = trajectory.x_vec[trajectory.x_vec.size()-1] - trajectory.x_vec[trajectory.x_vec.size()-2];
+    double vy_final = trajectory.y_vec[trajectory.y_vec.size()-1] - trajectory.y_vec[trajectory.y_vec.size()-2];
+    double speed_final = sqrt(pow(vx_final, 2)+pow(vy_final, 2)) * 50 * 2.24;
+    cost = abs(speed_limit - speed_final);
+  }
+  else{
+    cost = speed_limit;
+  }
 
   return cost;
 }
@@ -576,7 +583,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   trajectory_t final_trajectory = final_trajectories[best_idx];
   ref_vel = final_trajectory.ref_vel;
   lane = final_trajectory.final_lane;
-  cout << current_state << ", " << ref_vel << ", " << lane << ", " << costs[best_idx] << endl;
+  cout << current_state << ", " << ref_vel << ", " << lane << ", " << costs[best_idx] << endl; // TODO: DEBUG, remove when done
   return final_trajectory;
 }
 

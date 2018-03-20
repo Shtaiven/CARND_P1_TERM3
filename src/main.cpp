@@ -307,7 +307,8 @@ vector<vehicle_state_t> successor_states(vehicle_state_t state, int lane, int la
 }
 
 // Used for calculating trajectories of observed vehicles
-trajectory_t constant_speed_trajectory(vehicle_t vehicle, int num_points, trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
+trajectory_t constant_speed_trajectory(vehicle_t vehicle, int num_points,
+                                       trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   trajectory_t trajectory;
   trajectory.ref_vel = vehicle.speed;
@@ -330,7 +331,7 @@ trajectory_t constant_speed_trajectory(vehicle_t vehicle, int num_points, trajec
   double ref_y = vehicle.y;
   double ref_yaw = vehicle.yaw;
 
-// Start our path by looking at the previous point traversed and the current one
+  // Start our path by looking at the previous point traversed and the current one
   double prev_car_x = vehicle.x - cos(ref_yaw);
   double prev_car_y = vehicle.y - sin(ref_yaw);
 

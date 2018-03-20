@@ -1,6 +1,6 @@
 # Implenting the Path Planner for the Udacity Term 3 Simulator
 
-### By Steven Eisinger
+By Steven Eisinger
 
 ## General Overview
 
@@ -16,7 +16,7 @@ The goal of this project is to plan the path of a simulated vehicle along a high
 1. The new trajectory is sent to the simulator and the program waits for further input.
 1. When data are received, begin at step 1.
 
-The sections below will go over the functions described above in detail. I will go in an order which improves understanding.
+The sections below will go over the functions described above in detail. All of the following code can be found in [main.cpp](src/main.cpp). I will go in an order which improves understanding.
 
 ## Generating a Trajectory
 
@@ -43,26 +43,26 @@ Trajectory calculation could be done in numerous different ways, such as generat
             // if the sensed car is in front of us
             if (check_car.d < (2+4*lane+2) && check_car.d > (2+4*lane-2))
             {
-            check_car.s += (double) prev_path_size * 0.02 * check_car.speed;
+                check_car.s += (double) prev_path_size * 0.02 * check_car.speed;
 
-            // if the sensed car is less than 30 meters away
-            if ((check_car.s > vehicle.s) && ((check_car.s - vehicle.s) < 30))
-            {
-                // lower velocity so we don't crash, maybe change lanes, set flags
-                switch (state)
+                // if the sensed car is less than 30 meters away
+                if ((check_car.s > vehicle.s) && ((check_car.s - vehicle.s) < 30))
                 {
-                case LANE_CHANGE_LEFT:
-                lane--;
-                break;
+                    // lower velocity so we don't crash, maybe change lanes, set flags
+                    switch (state)
+                    {
+                    case LANE_CHANGE_LEFT:
+                    lane--;
+                    break;
 
-                case LANE_CHANGE_RIGHT:
-                lane++;
-                break;
+                    case LANE_CHANGE_RIGHT:
+                    lane++;
+                    break;
 
-                default:
-                    too_close = true;
+                    default:
+                        too_close = true;
+                    }
                 }
-            }
             }
         }
     ```
@@ -202,3 +202,145 @@ There is a similar function, called `constant_speed_trajectory`, which does some
 
 ## Computing Trajectory Cost
 
+Before going into cost, it's important to understand the states. In this model, I only have 3 states: KEEP_LANE, LANE_CHANGE_LEFT, and LANE_CHANGE_RIGHT. The PREP_LANE_CHANGE* states were ommited for simplicity, under the assumption that the cost function will handle whether or not an action is safe. This means the car will never slow down or speed up in order to perform an intended lane change; it will only perform the lane change if possible in that instant. Our cost function outputs a high cost for poor trajectories and a low cost for good ones. Each possible trajectory is passed through the cost funstion to determin which one to follow. Range of costs can be in [0, inf]. To determine the cost we take into account 3 things: collision possibility, going offroad, and reference velocity.
+
+### Prevention from Going Offroad
+
+After initializing cost to a very large value (`MAX_DBL` which will give `inf`), we simply check that the final lane of the trajectory is valid, and return if not.
+
+```c++
+    // if the car goes offroad or goes into the lane going in the wrong direction
+    if (trajectory.final_lane < 0 || trajectory.final_lane >= lanes_available)
+    {
+        return cost;
+    }
+```
+
+### Detecting Possible Collisions
+
+This is the most difficult computation of the cost. While the code seems long, the concept is simple. Our car's trajectory is simplified to a line between the first and last points of the new trajectory we computed. From this line, we create 2 new lines: one following the trajectory of the left edge of our vehicle and another at the right edge of our vehicle. We do the same thing for each segment of each observed car's trajectory, then check if any of the lines from our car intersect any of the lines of an observed car. If any of these lines intersect, return the highest cost for this trajectory, because it will result in a collision.
+
+```c++
+  // Check for trajectory collisions here
+  if (trajectory.x_vec.size() > 1)
+  {
+    // linear estimation of cars trajectory (for speed of computation)
+    point_t p1;
+    p1.x = trajectory.x_vec[0];
+    p1.y = trajectory.y_vec[0];
+
+    point_t q1;
+    q1.x = trajectory.x_vec[trajectory.x_vec.size()-1];
+    q1.y = trajectory.y_vec[trajectory.y_vec.size()-1];
+
+    vector<double> p1_frenet = getFrenet(p1.x, p1.y, atan2(p1.y, p1.x), map_waypoints.x_vec, map_waypoints.y_vec);
+    vector<double> q1_frenet = getFrenet(q1.x, q1.y, atan2(q1.y, q1.x), map_waypoints.x_vec, map_waypoints.y_vec);
+
+    point_t p1_left_edge;
+    vector<double> p1_left_edge_temp;
+    p1_left_edge_temp = getXY(p1_frenet[0], p1_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    p1_left_edge.x = p1_left_edge_temp[0];
+    p1_left_edge.y = p1_left_edge_temp[1];
+
+    point_t q1_left_edge;
+    vector<double> q1_left_edge_temp;
+    q1_left_edge_temp = getXY(q1_frenet[0], q1_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    q1_left_edge.x = q1_left_edge_temp[0];
+    q1_left_edge.y = q1_left_edge_temp[1];
+
+    point_t p1_right_edge;
+    vector<double> p1_right_edge_temp;
+    p1_right_edge_temp = getXY(p1_frenet[0], p1_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    p1_right_edge.x = p1_right_edge_temp[0];
+    p1_right_edge.y = p1_right_edge_temp[1];
+
+    point_t q1_right_edge;
+    vector<double> q1_right_edge_temp;
+    q1_right_edge_temp = getXY(q1_frenet[0], q1_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    q1_right_edge.x = q1_right_edge_temp[0];
+    q1_right_edge.y = q1_right_edge_temp[1];
+
+    vector<point_t> car_edge_trajectories = { p1_left_edge, q1_left_edge, p1_right_edge, q1_right_edge };
+
+    // account for size of cars
+    for (int i = 0; i < observed_trajectories.size(); ++i)
+    {
+
+      for (int j = 0; j < observed_trajectories[i].x_vec.size()-1; ++j)
+      {
+        point_t p2;
+        p2.x = observed_trajectories[i].x_vec[j];
+        p2.y = observed_trajectories[i].y_vec[j];
+
+        point_t q2;
+        q2.x = observed_trajectories[i].x_vec[j+1];
+        q2.y = observed_trajectories[i].y_vec[j+1];
+
+        vector<double> p2_frenet = getFrenet(p2.x, p2.y, atan2(p2.y, p2.x), map_waypoints.x_vec, map_waypoints.y_vec);
+        vector<double> q2_frenet = getFrenet(q2.x, q2.y, atan2(q2.y, q2.x), map_waypoints.x_vec, map_waypoints.y_vec);
+
+        point_t p2_left_edge;
+        vector<double> p2_left_edge_temp;
+        p2_left_edge_temp = getXY(p2_frenet[0], p2_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        p2_left_edge.x = p2_left_edge_temp[0];
+        p2_left_edge.y = p2_left_edge_temp[1];
+
+        point_t q2_left_edge;
+        vector<double> q2_left_edge_temp;
+        q2_left_edge_temp = getXY(q2_frenet[0], q2_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        q2_left_edge.x = q2_left_edge_temp[0];
+        q2_left_edge.y = q2_left_edge_temp[1];
+
+        point_t p2_right_edge;
+        vector<double> p2_right_edge_temp;
+        p2_right_edge_temp = getXY(p2_frenet[0], p2_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        p2_right_edge.x = p2_right_edge_temp[0];
+        p2_right_edge.y = p2_right_edge_temp[1];
+
+        point_t q2_right_edge;
+        vector<double> q2_right_edge_temp;
+        q2_right_edge_temp = getXY(q2_frenet[0], q2_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        q2_right_edge.x = q2_right_edge_temp[0];
+        q2_right_edge.y = q2_right_edge_temp[1];
+
+        vector<point_t> obs_edge_trajectories = { p2_left_edge, q2_left_edge, p2_right_edge, q2_right_edge };
+
+        // if there will be a collision with an observed vehicle, return the cost
+        for (int k = 0; k < car_edge_trajectories.size(); k += 2) {
+          for (int l = 0; l < obs_edge_trajectories.size(); l += 2) {
+            if (doIntersect(car_edge_trajectories[k], car_edge_trajectories[k+1], obs_edge_trajectories[l], obs_edge_trajectories[l+1]))
+            {
+              return cost;
+            }
+          }
+        }
+      }
+    }
+  }
+```
+
+### Reference Velocity
+
+If the trajectory passed either of the previous two checks without returning, the cost is based on the anticipated final speed.
+
+```c++
+  // Rank trajectory based on distance from speed limit
+  if (trajectory.x_vec.size() > 1)
+  {
+    double vx_final = trajectory.x_vec[trajectory.x_vec.size()-1] - trajectory.x_vec[trajectory.x_vec.size()-2];
+    double vy_final = trajectory.y_vec[trajectory.y_vec.size()-1] - trajectory.y_vec[trajectory.y_vec.size()-2];
+    double speed_final = sqrt(pow(vx_final, 2)+pow(vy_final, 2)) * 50 * 2.24;
+    cost = abs(speed_limit - speed_final);
+  }
+  else{
+    cost = speed_limit;
+  }
+```
+
+The absolute value of the difference from the speed limit is calculated. Faster is better!
+
+## Final Thoughts on Implementation
+
+There are a lot of improvements to be made to this program, dealing with computational efficiency and the number of assumptions made. The program assumes that there are known waypoints on a road, the road always has the same number of lanes and the same speed limit, and there are no road irregularities to avoid. We also never anticipate crossing an intersection. From these assumptions alone, this program has limited use in the real world. This program also isn't the safest because in our cost function, we don't accurately account for the amount of space a car takes, and we don't even pass in spacial data, we assume every car has the same dimensions. The car is also quite naive, there is no attempt to slow down temporarily in order to acheive a higher speed in the near future by changing lanes. The car will only slow down if a lane change isn't possible because of a predicted collision and there's a car ahead.
+
+Many of the structs used in this program, like `point_t`, `vehicle_t`, and `trajectory_t` are somewhat redundant and can be merged into a unified `Vehicle` class, however this might result in more memory usage by the program. The struct approach is very 'c-like' which I've been inclined to using because of my experiences writing firmware. The other advantage of using objects would be the reduced number of passed in parameters in most of the functions.

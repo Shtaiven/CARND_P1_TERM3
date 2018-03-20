@@ -630,7 +630,7 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
 
     vector<point_t> car_edge_trajectories = { p1_left_edge, q1_left_edge, p1_right_edge, q1_right_edge };
 
-    // TODO: account for size of cars
+    // account for size of cars
     for (int i = 0; i < observed_trajectories.size(); ++i)
     {
 
@@ -678,14 +678,14 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
           for (int l = 0; l < obs_edge_trajectories.size(); l += 2) {
             if (doIntersect(car_edge_trajectories[k], car_edge_trajectories[k+1], obs_edge_trajectories[l], obs_edge_trajectories[l+1]))
             {
-              printf("traj %d, iter %d (%lf, %lf) (%lf, %lf) intersects (%lf, %lf) (%lf, %lf)\n", i, j, car_edge_trajectories[k].x,
-                                                                                                        car_edge_trajectories[k].y,
-                                                                                                        car_edge_trajectories[k+1].x,
-                                                                                                        car_edge_trajectories[k+1].y,
-                                                                                                        obs_edge_trajectories[l].x,
-                                                                                                        obs_edge_trajectories[l].y,
-                                                                                                        obs_edge_trajectories[l+1].x,
-                                                                                                        obs_edge_trajectories[l+1].y);
+              // printf("traj %d, iter %d (%lf, %lf) (%lf, %lf) intersects (%lf, %lf) (%lf, %lf)\n", i, j, car_edge_trajectories[k].x,
+              //                                                                                           car_edge_trajectories[k].y,
+              //                                                                                           car_edge_trajectories[k+1].x,
+              //                                                                                           car_edge_trajectories[k+1].y,
+              //                                                                                           obs_edge_trajectories[l].x,
+              //                                                                                           obs_edge_trajectories[l].y,
+              //                                                                                           obs_edge_trajectories[l+1].x,
+              //                                                                                           obs_edge_trajectories[l+1].y);
               return cost;
             }
           }
@@ -741,7 +741,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   trajectory_t final_trajectory = final_trajectories[best_idx];
   ref_vel = final_trajectory.ref_vel;
   lane = final_trajectory.final_lane;
-  cout << current_state << ", " << ref_vel << ", " << lane << ", " << costs[best_idx] << endl; // TODO: DEBUG, remove when done
+  // cout << current_state << ", " << ref_vel << ", " << lane << ", " << costs[best_idx] << endl;
   return final_trajectory;
 }
 

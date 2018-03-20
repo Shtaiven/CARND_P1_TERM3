@@ -573,12 +573,13 @@ trajectory_t generate_trajectory(vehicle_t vehicle, vehicle_state_t state, vecto
   return trajectory;
 }
 
-double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_trajectories, int lanes_available, double speed_limit)
+double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_trajectories, int lanes_available, double speed_limit,
+                      trajectory_t map_waypoints, trajectory_t map_waypoints_del, vector<double> map_waypoints_s)
 {
   // Calculate cost of a trajectory by checking if:
   // - there will be a collision
   // - the car goes offroad
-  // - the lane change will result in being slower
+  // - the lane change will result in a slower velocity
 
   double cost = DBL_MAX;
 
@@ -600,6 +601,35 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
     q1.x = trajectory.x_vec[trajectory.x_vec.size()-1];
     q1.y = trajectory.y_vec[trajectory.y_vec.size()-1];
 
+    vector<double> p1_frenet = getFrenet(p1.x, p1.y, atan2(p1.y, p1.x), map_waypoints.x_vec, map_waypoints.y_vec);
+    vector<double> q1_frenet = getFrenet(q1.x, q1.y, atan2(q1.y, q1.x), map_waypoints.x_vec, map_waypoints.y_vec);
+
+    point_t p1_left_edge;
+    vector<double> p1_left_edge_temp;
+    p1_left_edge_temp = getXY(p1_frenet[0], p1_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    p1_left_edge.x = p1_left_edge_temp[0];
+    p1_left_edge.y = p1_left_edge_temp[1];
+
+    point_t q1_left_edge;
+    vector<double> q1_left_edge_temp;
+    q1_left_edge_temp = getXY(q1_frenet[0], q1_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    q1_left_edge.x = q1_left_edge_temp[0];
+    q1_left_edge.y = q1_left_edge_temp[1];
+
+    point_t p1_right_edge;
+    vector<double> p1_right_edge_temp;
+    p1_right_edge_temp = getXY(p1_frenet[0], p1_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    p1_right_edge.x = p1_right_edge_temp[0];
+    p1_right_edge.y = p1_right_edge_temp[1];
+
+    point_t q1_right_edge;
+    vector<double> q1_right_edge_temp;
+    q1_right_edge_temp = getXY(q1_frenet[0], q1_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+    q1_right_edge.x = q1_right_edge_temp[0];
+    q1_right_edge.y = q1_right_edge_temp[1];
+
+    vector<point_t> car_edge_trajectories = { p1_left_edge, q1_left_edge, p1_right_edge, q1_right_edge };
+
     // TODO: account for size of cars
     for (int i = 0; i < observed_trajectories.size(); ++i)
     {
@@ -614,11 +644,51 @@ double calculate_cost(trajectory_t trajectory, vector<trajectory_t> observed_tra
         q2.x = observed_trajectories[i].x_vec[j+1];
         q2.y = observed_trajectories[i].y_vec[j+1];
 
+        vector<double> p2_frenet = getFrenet(p2.x, p2.y, atan2(p2.y, p2.x), map_waypoints.x_vec, map_waypoints.y_vec);
+        vector<double> q2_frenet = getFrenet(q2.x, q2.y, atan2(q2.y, q2.x), map_waypoints.x_vec, map_waypoints.y_vec);
+
+        point_t p2_left_edge;
+        vector<double> p2_left_edge_temp;
+        p2_left_edge_temp = getXY(p2_frenet[0], p2_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        p2_left_edge.x = p2_left_edge_temp[0];
+        p2_left_edge.y = p2_left_edge_temp[1];
+
+        point_t q2_left_edge;
+        vector<double> q2_left_edge_temp;
+        q2_left_edge_temp = getXY(q2_frenet[0], q2_frenet[1] - 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        q2_left_edge.x = q2_left_edge_temp[0];
+        q2_left_edge.y = q2_left_edge_temp[1];
+
+        point_t p2_right_edge;
+        vector<double> p2_right_edge_temp;
+        p2_right_edge_temp = getXY(p2_frenet[0], p2_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        p2_right_edge.x = p2_right_edge_temp[0];
+        p2_right_edge.y = p2_right_edge_temp[1];
+
+        point_t q2_right_edge;
+        vector<double> q2_right_edge_temp;
+        q2_right_edge_temp = getXY(q2_frenet[0], q2_frenet[1] + 1.5, map_waypoints_s, map_waypoints.x_vec, map_waypoints.y_vec);
+        q2_right_edge.x = q2_right_edge_temp[0];
+        q2_right_edge.y = q2_right_edge_temp[1];
+
+        vector<point_t> obs_edge_trajectories = { p2_left_edge, q2_left_edge, p2_right_edge, q2_right_edge };
+
         // if there will be a collision with an observed vehicle, return the cost
-        if (doIntersect(p1, q1, p2, q2))
-        {
-          printf("traj %d, iter %d (%lf, %lf) (%lf, %lf) intersects (%lf, %lf) (%lf, %lf)\n", i, j, p1.x ,p1.y, p2.x, p2.y, q1.x, q1.y, q2.x, q2.y);
-          return cost;
+        for (int k = 0; k < car_edge_trajectories.size(); k += 2) {
+          for (int l = 0; l < obs_edge_trajectories.size(); l += 2) {
+            if (doIntersect(car_edge_trajectories[k], car_edge_trajectories[k+1], obs_edge_trajectories[l], obs_edge_trajectories[l+1]))
+            {
+              printf("traj %d, iter %d (%lf, %lf) (%lf, %lf) intersects (%lf, %lf) (%lf, %lf)\n", i, j, car_edge_trajectories[k].x,
+                                                                                                        car_edge_trajectories[k].y,
+                                                                                                        car_edge_trajectories[k+1].x,
+                                                                                                        car_edge_trajectories[k+1].y,
+                                                                                                        obs_edge_trajectories[l].x,
+                                                                                                        obs_edge_trajectories[l].y,
+                                                                                                        obs_edge_trajectories[l+1].x,
+                                                                                                        obs_edge_trajectories[l+1].y);
+              return cost;
+            }
+          }
         }
       }
     }
@@ -658,7 +728,7 @@ trajectory_t choose_next_trajectory(vehicle_t vehicle, vehicle_state_t & current
   {
     trajectory_t trajectory = generate_trajectory(vehicle, states[i], sensor_data, lane, ref_vel, prev_path, total_path_size, map_waypoints, map_waypoints_del, map_waypoints_s);
     if (trajectory.x_vec.size() != 0) {
-        cost = calculate_cost(trajectory, observed_trajectories, lanes_available, 50.0);
+        cost = calculate_cost(trajectory, observed_trajectories, lanes_available, 50.0, map_waypoints, map_waypoints_del, map_waypoints_s);
         costs.push_back(cost);
         final_trajectories.push_back(trajectory);
     }
